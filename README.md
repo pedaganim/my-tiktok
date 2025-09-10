@@ -13,6 +13,8 @@ A low-cost TikTok-like web application that displays random photos and videos fr
 
 ## 📖 Quick Start
 
+### Local Development
+
 1. Clone the repository
 2. Open `index.html` in a web browser or serve via HTTP server:
    ```bash
@@ -22,8 +24,19 @@ A low-cost TikTok-like web application that displays random photos and videos fr
 
 For detailed setup and S3 integration instructions, see [APP_README.md](APP_README.md).
 
+### AWS Deployment
+
+To deploy the application to AWS using Terraform and GitHub Actions:
+
+1. See the comprehensive [Deployment Guide](DEPLOYMENT.md)
+2. Configure your GitHub secrets
+3. Push to the `main` branch for automatic deployment
+
 ## 🎯 Roadmap
 
+- [x] **AWS Deployment**: Terraform scripts for AWS infrastructure
+- [x] **Configurable S3 Integration**: Environment-based configuration
+- [x] **GitHub Actions CI/CD**: Automated deployment pipeline
 - [ ] Add comments functionality
 - [ ] Add favorite/like feature
 - [ ] User authentication
