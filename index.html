@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My TikTok - Random S3 Media</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <div class="media-container" id="mediaContainer">
+            <div class="media-item active" id="currentMedia">
+                <img id="mediaImage" class="media-content hidden" alt="Media content">
+                <video id="mediaVideo" class="media-content hidden" controls muted playsinline>
+                    Your browser does not support the video tag.
+                </video>
+                <div class="loading-indicator" id="loadingIndicator">
+                    <div class="spinner"></div>
+                    <p>Loading...</p>
+                </div>
+                <div class="error-indicator hidden" id="errorIndicator">
+                    <p>Failed to load media</p>
+                    <button onclick="retryCurrentMedia()">Retry</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button class="nav-button" onclick="previousMedia()">↑ Previous</button>
+            <button class="nav-button" onclick="nextMedia()">↓ Next</button>
+        </div>
+        
+        <div class="media-info">
+            <span id="mediaCounter">1 / ?</span>
+            <span id="mediaType"></span>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
