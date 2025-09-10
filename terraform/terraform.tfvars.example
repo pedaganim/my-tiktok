@@ -1,0 +1,21 @@
+# AWS Configuration
+aws_region  = "us-east-1"
+environment = "development"
+
+# S3 Configuration
+# IMPORTANT: This bucket name must be globally unique across all AWS accounts
+# Consider using a format like: your-company-my-tiktok-dev-12345
+media_bucket_name = "your-unique-my-tiktok-media-bucket"
+
+# CloudFront Configuration
+cloudfront_price_class = "PriceClass_100"
+
+# GitHub Integration (for GitHub Actions OIDC)
+github_repository = "pedaganim/my-tiktok"
+# github_oidc_provider_arn = "arn:aws:iam::YOUR_ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
+
+# Deployment Role (optional)
+# deployment_role_arn = "arn:aws:iam::YOUR_ACCOUNT_ID:role/your-deployment-role"
+
+# Optional Lambda backend for presigned URLs
+create_lambda_backend = false

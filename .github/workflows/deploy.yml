@@ -1,0 +1,193 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches:
+      - main
+      - staging
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'development'
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+
+env:
+  TF_VERSION: '1.5.0'
+  TF_IN_AUTOMATION: 'true'
+  TF_INPUT: 'false'
+
+jobs:
+  terraform-plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOYMENT_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Create terraform.tfvars
+        working-directory: terraform
+        run: |
+          cat > terraform.tfvars << EOF
+          aws_region = "${{ secrets.AWS_REGION || 'us-east-1' }}"
+          environment = "${{ github.event.inputs.environment || 'development' }}"
+          media_bucket_name = "${{ secrets.MEDIA_BUCKET_NAME }}"
+          cloudfront_price_class = "${{ secrets.CLOUDFRONT_PRICE_CLASS || 'PriceClass_100' }}"
+          github_repository = "${{ github.repository }}"
+          github_oidc_provider_arn = "${{ secrets.GITHUB_OIDC_PROVIDER_ARN }}"
+          deployment_role_arn = "${{ secrets.AWS_DEPLOYMENT_ROLE_ARN }}"
+          create_lambda_backend = ${{ secrets.CREATE_LAMBDA_BACKEND || 'false' }}
+          EOF
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: terraform init
+
+      - name: Terraform Validate
+        working-directory: terraform
+        run: terraform validate
+
+      - name: Terraform Plan
+        working-directory: terraform
+        run: terraform plan -no-color
+        continue-on-error: true
+
+  terraform-apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    needs: terraform-plan
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOYMENT_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Create terraform.tfvars
+        working-directory: terraform
+        run: |
+          cat > terraform.tfvars << EOF
+          aws_region = "${{ secrets.AWS_REGION || 'us-east-1' }}"
+          environment = "${{ github.event.inputs.environment || 'production' }}"
+          media_bucket_name = "${{ secrets.MEDIA_BUCKET_NAME }}"
+          cloudfront_price_class = "${{ secrets.CLOUDFRONT_PRICE_CLASS || 'PriceClass_100' }}"
+          github_repository = "${{ github.repository }}"
+          github_oidc_provider_arn = "${{ secrets.GITHUB_OIDC_PROVIDER_ARN }}"
+          deployment_role_arn = "${{ secrets.AWS_DEPLOYMENT_ROLE_ARN }}"
+          create_lambda_backend = ${{ secrets.CREATE_LAMBDA_BACKEND || 'false' }}
+          EOF
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: terraform
+        run: terraform apply -auto-approve
+
+      - name: Upload website files
+        run: |
+          # Generate config.js from template with actual values
+          MEDIA_BUCKET_DOMAIN="${{ secrets.MEDIA_BUCKET_NAME }}.s3.${{ secrets.AWS_REGION || 'us-east-1' }}.amazonaws.com"
+          API_ENDPOINT="${{ secrets.API_ENDPOINT || '/api/random-media' }}"
+          ENVIRONMENT="${{ github.event.inputs.environment || 'production' }}"
+          
+          sed "s|\${MEDIA_BUCKET_DOMAIN}|$MEDIA_BUCKET_DOMAIN|g; s|\${API_ENDPOINT}|$API_ENDPOINT|g; s|\${ENVIRONMENT}|$ENVIRONMENT|g" config.js.template > config.js
+          
+          aws s3 sync . s3://${{ secrets.MEDIA_BUCKET_NAME }}-website/ \
+            --exclude ".git/*" \
+            --exclude "terraform/*" \
+            --exclude ".github/*" \
+            --exclude "*.md" \
+            --exclude ".gitignore" \
+            --exclude "config.js.template"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          DISTRIBUTION_ID=$(terraform -chdir=terraform output -raw cloudfront_distribution_id)
+          aws cloudfront create-invalidation \
+            --distribution-id $DISTRIBUTION_ID \
+            --paths "/*"
+
+  deploy-website:
+    name: Deploy Website Files
+    runs-on: ubuntu-latest
+    needs: terraform-apply
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOYMENT_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Upload website files to S3
+        run: |
+          # Generate config.js from template with actual values
+          MEDIA_BUCKET_DOMAIN="${{ secrets.MEDIA_BUCKET_NAME }}.s3.${{ secrets.AWS_REGION || 'us-east-1' }}.amazonaws.com"
+          API_ENDPOINT="${{ secrets.API_ENDPOINT || '/api/random-media' }}"
+          ENVIRONMENT="${{ github.event.inputs.environment || 'production' }}"
+          
+          sed "s|\${MEDIA_BUCKET_DOMAIN}|$MEDIA_BUCKET_DOMAIN|g; s|\${API_ENDPOINT}|$API_ENDPOINT|g; s|\${ENVIRONMENT}|$ENVIRONMENT|g" config.js.template > config.js
+          
+          aws s3 sync . s3://${{ secrets.MEDIA_BUCKET_NAME }}-website/ \
+            --exclude ".git/*" \
+            --exclude "terraform/*" \
+            --exclude ".github/*" \
+            --exclude "*.md" \
+            --exclude ".gitignore" \
+            --exclude "terraform.tfvars*" \
+            --exclude "config.js.template"
+
+      - name: Get CloudFront distribution ID and invalidate cache
+        run: |
+          cd terraform
+          terraform init
+          DISTRIBUTION_ID=$(terraform output -raw cloudfront_distribution_id)
+          aws cloudfront create-invalidation \
+            --distribution-id $DISTRIBUTION_ID \
+            --paths "/*"

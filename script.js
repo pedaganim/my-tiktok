@@ -266,6 +266,13 @@ document.addEventListener('DOMContentLoaded', () => {
     window.mediaViewer = new MediaViewer();
 });
 
+// Configuration object for the application
+const APP_CONFIG = {
+    apiEndpoint: window.APP_API_ENDPOINT || '/api/random-media',
+    mediaBucketDomain: window.APP_MEDIA_DOMAIN || 'your-media-bucket.s3.amazonaws.com',
+    environment: window.APP_ENVIRONMENT || 'development'
+};
+
 // API functions for future integration with presigned URLs
 class S3MediaAPI {
     static async getPresignedUrls() {
@@ -290,11 +297,19 @@ class S3MediaAPI {
         // This would fetch random media items from your backend
         // which would generate presigned URLs for random S3 objects
         try {
-            // const response = await fetch('/api/random-media');
-            // return await response.json();
-            return await this.getPresignedUrls();
+            const response = await fetch(APP_CONFIG.apiEndpoint);
+            if (response.ok) {
+                return await response.json();
+            } else {
+                console.warn('API endpoint not available, using sample data');
+                return await this.getPresignedUrls();
+            }
         } catch (error) {
             console.error('Failed to fetch media:', error);
+            // Fallback to sample data in development
+            if (APP_CONFIG.environment === 'development') {
+                return await this.getPresignedUrls();
+            }
             return [];
         }
     }

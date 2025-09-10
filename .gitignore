@@ -42,3 +42,14 @@ coverage/
 # Distribution folders
 dist/
 build/
+
+# Terraform files
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/terraform.tfvars
+*.tfplan
+
+# Generated configuration files
+config.js
